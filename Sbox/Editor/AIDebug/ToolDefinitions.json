@@ -1,0 +1,367 @@
+[
+  {
+    "name": "info",
+    "description": "Engine version and commit, project name, build type (editor / template_debug), PID, .NET runtime version, active Harmony patches, and activation time.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "tree",
+    "description": "Export the live s&box scene hierarchy (paths, classes, scripts, and optional property summaries).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Starting node path (default: root window)."
+        },
+        "depth": {
+          "type": "integer",
+          "default": 6
+        },
+        "include_properties": {
+          "type": "boolean",
+          "default": false
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "get",
+    "description": "Read any property on a GameObject via s&box reflection (works for both C# game objects and components).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "description": "Game object path/name, GUID, or object#ComponentType."
+        },
+        "property": {
+          "type": "string",
+          "description": "Property name or indexed path (e.g. position, position:x)."
+        }
+      },
+      "required": [
+        "node",
+        "property"
+      ]
+    }
+  },
+  {
+    "name": "set",
+    "description": "Write any property on a GameObject via s&box reflection.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "description": "Game object path/name, GUID, or object#ComponentType."
+        },
+        "property": {
+          "type": "string",
+          "description": "Property name or indexed path."
+        },
+        "value": {
+          "description": "New value (number, bool, string, Vector/Color dict or string expression like 'Vector3(1,2,3)' or 'Color(1,0,0,1)')."
+        }
+      },
+      "required": [
+        "node",
+        "property",
+        "value"
+      ]
+    }
+  },
+  {
+    "name": "call",
+    "description": "Invoke any method on a GameObject via s&box reflection.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string",
+          "description": "Game object path/name, GUID, or object#ComponentType."
+        },
+        "method": {
+          "type": "string",
+          "description": "Method name."
+        },
+        "args": {
+          "type": "array",
+          "items": {},
+          "default": []
+        }
+      },
+      "required": [
+        "node",
+        "method"
+      ]
+    }
+  },
+  {
+    "name": "eval_cs",
+    "description": "Execute arbitrary C# code using Roslyn Scripting. Globals: Tree, Root, CurrentScene, GameObject(path), Find<T>(), FindAll<T>(), Log(msg), Traverse(obj), GetPrivate(obj, name), SetPrivate(obj, name, val), CallPrivate(obj, name, args...). State persists across calls within the session. Only one evaluation may run at a time. Cancellation is cooperative: timeout/reset can return while code is still running. Main-thread code must return promptly. Use Cancellation.ThrowIfCancellationRequested() in long loops. Worker code must not access the s&box scene.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "C# code to evaluate."
+        },
+        "thread": {
+          "type": "string",
+          "enum": [
+            "main",
+            "worker"
+          ],
+          "default": "main",
+          "description": "Execution thread: 'main' (between frames) or 'worker' (for read-only heavy analysis)."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "default": 10000,
+          "minimum": 1,
+          "maximum": 300000,
+          "description": "Cooperative cancellation and response deadline, not a hard execution limit."
+        },
+        "reset_session": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "code"
+      ]
+    }
+  },
+  {
+    "name": "patch_cs",
+    "description": "Compile a C# patch with Roslyn and apply it at runtime via Harmony. Returns patch ID and inline warning if applicable.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "Target method: 'Namespace.Type:Method(ParamType1, ParamType2)'."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "prefix",
+            "postfix",
+            "finalizer",
+            "transpiler",
+            "replace"
+          ],
+          "default": "prefix"
+        },
+        "code": {
+          "type": "string",
+          "description": "C# patch body (has access to __instance, __result, method parameters, or full static method)."
+        }
+      },
+      "required": [
+        "target",
+        "code"
+      ]
+    }
+  },
+  {
+    "name": "unpatch",
+    "description": "Revert a single Harmony patch by ID or all patches ('all').",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "default": "all",
+          "description": "Patch ID (e.g. 'p1') or 'all'."
+        }
+      }
+    }
+  },
+  {
+    "name": "list_patches",
+    "description": "List all active C# Harmony patches (id, target, kind, applied_at, call_count).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "pause",
+    "description": "Pause or resume the s&box scene.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "paused": {
+          "type": "boolean",
+          "description": "True to pause, false to resume (omit to toggle)."
+        }
+      }
+    }
+  },
+  {
+    "name": "step",
+    "description": "Advance N process frames and pause. Physics ticks depend on engine timing.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "frames": {
+          "type": "integer",
+          "default": 1
+        }
+      }
+    }
+  },
+  {
+    "name": "time_scale",
+    "description": "Get or set Engine.time_scale.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "scale": {
+          "type": "number"
+        }
+      }
+    }
+  },
+  {
+    "name": "screenshot",
+    "description": "Capture the main viewport as PNG (save to file path and/or return base64 PNG).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Optional file path to save PNG."
+        },
+        "base64": {
+          "type": "boolean",
+          "default": true
+        },
+        "max_width": {
+          "type": "integer",
+          "default": 0
+        }
+      }
+    }
+  },
+  {
+    "name": "logs",
+    "description": "Return the most recent N log entries from the in-memory ring buffer (including errors and warnings).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "default": 100
+        },
+        "level": {
+          "type": "string",
+          "description": "Optional filter: info, warning, error."
+        },
+        "clear": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    }
+  },
+  {
+    "name": "dump",
+    "description": "Write a Windows process minidump (mini or full) via MiniDumpWriteDump to .ai_debug/dumps/.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "mini",
+            "full"
+          ],
+          "default": "mini"
+        },
+        "path": {
+          "type": "string",
+          "description": "Optional custom output file path."
+        }
+      }
+    }
+  },
+  {
+    "name": "hook_native",
+    "description": "Hook a native C/C++ function by symbol name (resolved via DbgHelp + PDB) or export using MinHook (Windows x64). Modes: 'log' (records first 4 integer arg registers rcx/rdx/r8/r9, return value rax, and call count), 'return_const' (immediately returns a 64-bit integer constant), or 'dll' (redirects to an exported function in an Agent-compiled DLL).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "symbol": {
+          "type": "string",
+          "description": "C++ symbol name (e.g. 's&box scene::is_paused'), 'module.dll!export', or hex address '0x...'."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "log",
+            "return_const",
+            "dll"
+          ],
+          "default": "log"
+        },
+        "return_const": {
+          "type": "integer",
+          "default": 0,
+          "description": "Constant return value when mode='return_const'."
+        },
+        "dll_path": {
+          "type": "string",
+          "description": "Path to replacement DLL when mode='dll'."
+        },
+        "export": {
+          "type": "string",
+          "description": "Exported function name in replacement DLL."
+        }
+      },
+      "required": [
+        "symbol"
+      ]
+    }
+  },
+  {
+    "name": "unhook_native",
+    "description": "Remove a native hook by ID (e.g. 'nh1'), symbol name, or 'all'.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "default": "all"
+        }
+      }
+    }
+  },
+  {
+    "name": "list_native_hooks",
+    "description": "List active native C++ hooks, call counts, and recent logged register/return values.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "reset",
+    "description": "Cancel pending C# evaluations cooperatively, clear the script session, remove debugger patches/hooks, and restore initial pause/time_scale. Does not undo property writes or arbitrary script side effects. Reports cleanup failures and executions that may still be running.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  }
+]

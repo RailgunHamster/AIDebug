@@ -7,6 +7,8 @@
 | 目录 | 实现 | 当前适配 |
 | --- | --- | --- |
 | [Godot/](Godot/README.md) | Godot 源码模块，可选 .NET 求值和补丁 | Godot 4.8-beta2，Windows x64 已验证 |
+| [Sbox/](Sbox/README.md) | s&box 项目编辑器入口和可显式加载的运行时调试程序集 | Windows x64，编辑器 Play 与独立游戏 |
+
 
 ## 只取 Godot 实现
 

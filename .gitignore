@@ -29,3 +29,8 @@ venv/
 .vscode/
 *.user
 *.suo
+
+/Sbox/Art/
+.ai_debug/
+/Sbox/Editor/AIDebug/Managed/
+/Sbox/Editor/AIDebug/Native/
