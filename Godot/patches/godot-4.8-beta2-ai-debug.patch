@@ -1,0 +1,260 @@
+diff --git a/modules/mono/mono_gd/gd_mono.h b/modules/mono/mono_gd/gd_mono.h
+--- a/modules/mono/mono_gd/gd_mono.h
++++ b/modules/mono/mono_gd/gd_mono.h
+@@ -34,0 +35 @@
++#include "modules/modules_enabled.gen.h"
+@@ -89,0 +91,7 @@
++#endif
++
++	// ai_debug: State for on-demand loading of Godot.AIDebug.dll.
++#ifdef MODULE_AI_DEBUG_ENABLED
++	void *ai_debug_entry_fn = nullptr;
++	String ai_debug_dll_path;
++	bool ai_debug_jit_no_inline = false;
+@@ -150,0 +159,6 @@
++	// ai_debug: On-demand loading and invocation of Godot.AIDebug.dll.
++#ifdef MODULE_AI_DEBUG_ENABLED
++	bool ai_debug_is_jit_no_inline() const { return ai_debug_jit_no_inline; }
++	String ai_debug_invoke(const String &p_command, const String &p_args_json);
++#endif
++
+diff --git a/modules/mono/mono_gd/gd_mono.cpp b/modules/mono/mono_gd/gd_mono.cpp
+--- a/modules/mono/mono_gd/gd_mono.cpp
++++ b/modules/mono/mono_gd/gd_mono.cpp
+@@ -73,0 +74,10 @@
++// Retain runtime delegates for optional AI Debug and built-in AI Guide loading.
++#if defined(MODULE_AI_DEBUG_ENABLED) || (defined(TOOLS_ENABLED) && defined(MODULE_AI_GUIDE_ENABLED))
++load_assembly_and_get_function_pointer_fn ai_debug_saved_load_assembly_fn = nullptr;
++get_function_pointer_fn ai_debug_saved_get_fn_ptr_fn = nullptr;
++#ifndef TOOLS_ENABLED
++void *ai_debug_coreclr_handle = nullptr;
++unsigned int ai_debug_domain_id = 0;
++#endif
++#endif
++
+@@ -380,0 +391,9 @@
++	// Retain runtime delegates for optional AI modules.
++#if defined(MODULE_AI_DEBUG_ENABLED) || (defined(TOOLS_ENABLED) && defined(MODULE_AI_GUIDE_ENABLED))
++	ai_debug_saved_load_assembly_fn = (load_assembly_and_get_function_pointer_fn)load_assembly_and_get_function_pointer;
++	void *get_fn_ptr = nullptr;
++	if (hostfxr_get_runtime_delegate(cxt, hdt_get_function_pointer, &get_fn_ptr) == 0) {
++		ai_debug_saved_get_fn_ptr_fn = (get_function_pointer_fn)get_fn_ptr;
++	}
++#endif
++
+@@ -417,0 +437,9 @@
++
++	// Retain runtime delegates for optional AI modules.
++#if defined(MODULE_AI_DEBUG_ENABLED) || (defined(TOOLS_ENABLED) && defined(MODULE_AI_GUIDE_ENABLED))
++	ai_debug_saved_load_assembly_fn = (load_assembly_and_get_function_pointer_fn)load_assembly_and_get_function_pointer;
++	void *get_fn_ptr = nullptr;
++	if (hostfxr_get_runtime_delegate(cxt, hdt_get_function_pointer, &get_fn_ptr) == 0) {
++		ai_debug_saved_get_fn_ptr_fn = (get_function_pointer_fn)get_fn_ptr;
++	}
++#endif
+@@ -595,0 +624,6 @@
++	// ai_debug: Save CoreCLR/MonoVM handle and domain ID for Android / Mono JIT on-demand loading.
++#ifdef MODULE_AI_DEBUG_ENABLED
++	ai_debug_coreclr_handle = coreclr_handle;
++	ai_debug_domain_id = domain_id;
++#endif
++
+@@ -642,0 +677,34 @@
++
++	// ai_debug: Disable JIT inlining before initializing hostfxr/CoreCLR when started with --ai-debug (unless --ai-debug-inline is passed).
++#ifdef MODULE_AI_DEBUG_ENABLED
++	{
++		bool want_ai_debug = OS::get_singleton()->get_environment("GODOT_AI_DEBUG") == "1" ||
++				OS::get_singleton()->get_environment("GODOT_AI_DEBUG").to_lower() == "true";
++		bool want_inline = OS::get_singleton()->get_environment("GODOT_AI_DEBUG_INLINE") == "1";
++		for (const String &arg : OS::get_singleton()->get_cmdline_args()) {
++			if (arg == "--ai-debug" || arg.begins_with("--ai-debug-")) {
++				want_ai_debug = true;
++			}
++			if (arg == "--ai-debug-inline") {
++				want_inline = true;
++			}
++		}
++		for (const String &arg : OS::get_singleton()->get_cmdline_user_args()) {
++			if (arg == "--ai-debug" || arg.begins_with("--ai-debug-")) {
++				want_ai_debug = true;
++			}
++			if (arg == "--ai-debug-inline") {
++				want_inline = true;
++			}
++		}
++		if (want_ai_debug && !want_inline) {
++			OS::get_singleton()->set_environment("DOTNET_JitNoInline", "1");
++#ifdef _WIN32
++			_wputenv_s(L"DOTNET_JitNoInline", L"1");
++#endif
++			ai_debug_jit_no_inline = true;
++		} else if (OS::get_singleton()->get_environment("DOTNET_JitNoInline") == "1") {
++			ai_debug_jit_no_inline = true;
++		}
++	}
++#endif
+@@ -702 +770,20 @@
+-	bool init_ok = godot_plugins_initialize(godot_dll_handle, &managed_callbacks,
++	// ai_debug: In exported self-contained builds, initialize the project assembly directly in AssemblyLoadContext.Default
++	// via hdt_get_function_pointer when available so AssemblyLoadContext.Default shares the single GodotSharp instance.
++	bool init_ok = false;
++#ifdef MODULE_AI_DEBUG_ENABLED
++	if (ai_debug_saved_get_fn_ptr_fn) {
++		String assembly_name = Path::get_csharp_project_name();
++		godot_plugins_initialize_fn default_alc_init = nullptr;
++		int rc = ai_debug_saved_get_fn_ptr_fn(
++				get_data(str_to_hostfxr("GodotPlugins.Game.Main, " + assembly_name)),
++				HOSTFXR_STR("InitializeFromGameProject"),
++				UNMANAGEDCALLERSONLY_METHOD,
++				nullptr,
++				nullptr,
++				(void **)&default_alc_init);
++		if (rc == 0 && default_alc_init != nullptr) {
++			godot_plugins_initialize = default_alc_init;
++		}
++	}
++#endif
++	init_ok = godot_plugins_initialize(godot_dll_handle, &managed_callbacks,
+@@ -853,0 +941,97 @@
++
++// ai_debug: On-demand loading of Godot.AIDebug.dll via AssemblyLoadContext.Default.
++#ifdef MODULE_AI_DEBUG_ENABLED
++namespace {
++using AIDebugResultCallback = void(CORECLR_DELEGATE_CALLTYPE *)(const char16_t *p_utf16_str, int32_t p_len, void *p_user_data);
++using AIDebugManagedEntryFn = int(CORECLR_DELEGATE_CALLTYPE *)(const char16_t *p_dll_path, const char16_t *p_cmd, const char16_t *p_args_json, AIDebugResultCallback p_cb, void *p_user_data);
++
++void CORECLR_DELEGATE_CALLTYPE _ai_debug_receive_string(const char16_t *p_utf16_str, int32_t p_len, void *p_user_data) {
++	String *out_str = static_cast<String *>(p_user_data);
++	if (out_str && p_utf16_str && p_len > 0) {
++		out_str->append_utf16(p_utf16_str, p_len);
++	}
++}
++} // namespace
++
++String GDMono::ai_debug_invoke(const String &p_command, const String &p_args_json) {
++	if (!runtime_initialized) {
++		return "{\"ok\":false,\"error\":\".NET runtime is not initialized in this process.\"}";
++	}
++
++	if (!ai_debug_entry_fn) {
++		Vector<String> candidates;
++		String exe_dir = OS::get_singleton()->get_executable_path().get_base_dir();
++		candidates.push_back(exe_dir.path_join("GodotSharp").path_join("AIDebug").path_join("Godot.AIDebug.dll").simplify_path());
++		candidates.push_back(GodotSharpDirs::get_api_assemblies_dir().path_join("Godot.AIDebug.dll").simplify_path());
++		candidates.push_back(GodotSharpDirs::get_api_assemblies_dir().path_join("AIDebug").path_join("Godot.AIDebug.dll").simplify_path());
++
++		for (const String &c : candidates) {
++			if (FileAccess::exists(c)) {
++				ai_debug_dll_path = c;
++				break;
++			}
++		}
++
++		if (ai_debug_dll_path.is_empty()) {
++			return "{\"ok\":false,\"error\":\"Godot.AIDebug.dll not found in GodotSharp/AIDebug or data directory.\"}";
++		}
++
++		HostFxrCharString dll_path_fxr = str_to_hostfxr(ai_debug_dll_path);
++		void *fn_ptr = nullptr;
++		int rc = -1;
++		// Prefer hdt_get_function_pointer if Godot.AIDebug is in the default probing path, else load via load_assembly_and_get_function_pointer
++		if (ai_debug_saved_get_fn_ptr_fn) {
++			rc = ai_debug_saved_get_fn_ptr_fn(
++					HOSTFXR_STR("Godot.AIDebug.Bootstrap, Godot.AIDebug"),
++					HOSTFXR_STR("ManagedEntry"),
++					UNMANAGEDCALLERSONLY_METHOD,
++					nullptr,
++					nullptr,
++					&fn_ptr);
++		}
++		if ((rc != 0 || fn_ptr == nullptr) && ai_debug_saved_load_assembly_fn) {
++			rc = ai_debug_saved_load_assembly_fn(
++					get_data(dll_path_fxr),
++					HOSTFXR_STR("Godot.AIDebug.Bootstrap, Godot.AIDebug"),
++					HOSTFXR_STR("ManagedEntry"),
++					UNMANAGEDCALLERSONLY_METHOD,
++					nullptr,
++					&fn_ptr);
++		}
++#ifndef TOOLS_ENABLED
++		// ai_debug: Fallback to CoreCLR/MonoVM delegate creation (used on Android Mono JIT)
++		if ((rc != 0 || fn_ptr == nullptr) && coreclr_create_delegate && ai_debug_coreclr_handle) {
++			rc = coreclr_create_delegate(
++					ai_debug_coreclr_handle,
++					ai_debug_domain_id,
++					"Godot.AIDebug",
++					"Godot.AIDebug.Bootstrap",
++					"ManagedEntry",
++					&fn_ptr);
++		}
++#endif
++		if (rc != 0 || fn_ptr == nullptr) {
++			return vformat("{\"ok\":false,\"error\":\"Failed to load Godot.AIDebug.dll (rc=%d).\"}", rc);
++		}
++		ai_debug_entry_fn = fn_ptr;
++	}
++
++	Char16String dll_u16 = ai_debug_dll_path.utf16();
++	Char16String cmd_u16 = p_command.utf16();
++	Char16String args_u16 = p_args_json.utf16();
++
++	String result;
++	AIDebugManagedEntryFn entry = (AIDebugManagedEntryFn)ai_debug_entry_fn;
++	entry(
++			(const char16_t *)dll_u16.get_data(),
++			(const char16_t *)cmd_u16.get_data(),
++			(const char16_t *)args_u16.get_data(),
++			&_ai_debug_receive_string,
++			&result);
++
++	if (result.is_empty()) {
++		return "{\"ok\":false,\"error\":\"Empty response from Godot.AIDebug.\"}";
++	}
++	return result;
++}
++#endif
+diff --git a/modules/mono/build_scripts/build_assemblies.py b/modules/mono/build_scripts/build_assemblies.py
+--- a/modules/mono/build_scripts/build_assemblies.py
++++ b/modules/mono/build_scripts/build_assemblies.py
+@@ -404,0 +405,40 @@
++    # ai_debug: Resolve the independently installed module, with a built-in fallback.
++    import json
++
++    godot_source_root = os.path.abspath(os.path.join(module_dir, os.pardir, os.pardir))
++    ai_debug_module_dir = os.environ.get("GODOT_AI_DEBUG_MODULE_DIR", "")
++    ai_debug_install_file = os.path.join(godot_source_root, ".ai_debug-install.json")
++    if not ai_debug_module_dir and os.path.isfile(ai_debug_install_file):
++        with open(ai_debug_install_file, encoding="utf-8") as install_file:
++            ai_debug_module_dir = json.load(install_file)["module_dir"]
++    if not ai_debug_module_dir:
++        ai_debug_module_dir = os.path.abspath(os.path.join(module_dir, os.pardir, "ai_debug"))
++    ai_debug_csproj = os.path.join(ai_debug_module_dir, "managed", "Godot.AIDebug", "Godot.AIDebug.csproj")
++    if os.path.isfile(ai_debug_csproj):
++        from shutil import copy
++
++        ai_debug_cfg = "Debug" if dev_debug else "Release"
++        ai_debug_args = [
++            "/restore",
++            "/t:Build",
++            "/p:Configuration=" + ai_debug_cfg,
++            "/p:GodotSourceRoot=" + godot_source_root,
++        ]
++        if precision == "double":
++            ai_debug_args += ["/p:GodotFloat64=true"]
++        if no_deprecated:
++            ai_debug_args += ["/p:GodotNoDeprecated=true"]
++        exit_code = run_msbuild(msbuild_tool, sln=ai_debug_csproj, chdir_to=module_dir, msbuild_args=ai_debug_args)
++        if exit_code != 0:
++            return exit_code
++
++        ai_debug_src_dir = os.path.join(os.path.dirname(ai_debug_csproj), "bin", ai_debug_cfg, "net10.0")
++        ai_debug_dst_dir = os.path.join(output_dir, "GodotSharp", "AIDebug")
++        os.makedirs(ai_debug_dst_dir, exist_ok=True)
++        for fname in os.listdir(ai_debug_src_dir):
++            src_file = os.path.join(ai_debug_src_dir, fname)
++            if os.path.isfile(src_file) and fname.lower().endswith((".dll", ".pdb")):
++                dst_file = os.path.join(ai_debug_dst_dir, fname)
++                print(f"Copying AI Debug assembly to {dst_file}...")
++                copy(src_file, dst_file)
++

@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+import tool_schema
+
+Import("env")
+Import("env_modules")
+
+if env["target"] != "template_release":
+    env_ai_debug = env_modules.Clone()
+    schema_header = env_ai_debug.CommandNoCache(
+        "ai_debug_tools.gen.h", "tools.json", env_ai_debug.Run(tool_schema.generate_header)
+    )
+    env_ai_debug.Depends(schema_header, "tool_schema.py")
+    env_ai_debug.Prepend(CPPPATH=[env_ai_debug.Dir("thirdparty/minhook")])
+
+    module_obj = []
+    if env["platform"] == "windows":
+        env_thirdparty = env_ai_debug.Clone()
+        env_thirdparty.disable_warnings()
+        env_thirdparty.add_source_files(module_obj, "thirdparty/minhook/*.c")
+
+    env_ai_debug.add_source_files(module_obj, "*.cpp")
+    if env.editor_build:
+        env_ai_debug.add_source_files(module_obj, "editor/*.cpp")
+    env.modules_sources += module_obj

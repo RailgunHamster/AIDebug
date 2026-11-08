@@ -1,0 +1,25 @@
+{
+  "engine": "Godot",
+  "version": "4.8-beta2",
+  "base_commit": "cafc17a192acf67903910a68aeb3c076c0907a4b",
+  "major": 4,
+  "minor": 8,
+  "status": "beta",
+  "target_framework": "net10.0",
+  "patches": [
+    {
+      "file": "patches/godot-4.8-beta2-ai-debug.patch",
+      "sha256": "dd9327ef410d63b7487d49115e7731b9812b5726d699375eeb5c8b668a527545",
+      "targets": [
+        "modules/mono/mono_gd/gd_mono.h",
+        "modules/mono/mono_gd/gd_mono.cpp",
+        "modules/mono/build_scripts/build_assemblies.py"
+      ],
+      "base_sha256": {
+        "modules/mono/mono_gd/gd_mono.h": "2e577b6c5be38590b322ceb4763a07f8346972ee48efd01bfe0e091e2e07aee0",
+        "modules/mono/mono_gd/gd_mono.cpp": "defdecbf78769a9615946495eb27e758e4005ff235c91fa8e05c8c5c47e1f8b5",
+        "modules/mono/build_scripts/build_assemblies.py": "9b646ea21c597e97d433c5ec5647b8282a1fa3248e18ca4f65c3e45c33026b0f"
+      }
+    }
+  ]
+}

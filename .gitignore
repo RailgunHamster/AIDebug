@@ -1,0 +1,31 @@
+# Generated Godot / SCons files.
+*.gen.*
+.scons*
+
+# Managed and native build outputs.
+bin/
+obj/
+*.obj
+*.o
+*.a
+*.dll
+*.so
+*.dylib
+*.exe
+*.pdb
+*.lib
+*.exp
+
+# Python caches and local environments.
+__pycache__/
+*.py[cod]
+.*_cache/
+.venv/
+venv/
+
+# Local editor state.
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
