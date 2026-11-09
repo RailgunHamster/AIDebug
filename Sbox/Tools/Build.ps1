@@ -25,4 +25,5 @@ cl /nologo /O2 /MD /LD "$package/Tests/native_fixture.c" /Fo"$output/fixture.obj
 $commandFile=Join-Path $output 'build.cmd';[IO.File]::WriteAllText($commandFile,$commands)
 & $env:ComSpec /d /c $commandFile
 if($LASTEXITCODE -ne 0){throw 'Native AIDebug build failed'}
+& "$PSScriptRoot/Update-RuntimeFiles.ps1"
 Write-Output 'Built the independent s&box runtime debugger, native adapter and test fixture.'

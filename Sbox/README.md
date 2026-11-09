@@ -2,29 +2,17 @@
 
 这是现有 AIDebug 仓库的 s&box 实现，与 `Godot/` 并列。参考 Godot `84fd57b` 的通用运行时调试边界，使用 s&box 的场景、主线程和可信本地 MCP 接口重新适配。游戏不需要实现存档接口、继承调试基类或录制输入。
 
-## 安装与更新
+## 标准 Library 与自动编译
 
-需要 Windows x64、PowerShell 7、.NET 10 SDK、Visual Studio 2022 C++ 工具，以及与项目匹配的 s&box 引擎。首次安装会构建调试程序集和原生适配 DLL，不重新编译引擎。构建输出不进 Git。
+`Sbox/` 是独立的 s&box Library，根目录 `.sbproj` 声明 `railgunhamster.aidebug`。项目通过 Verso Git 依赖将这个子目录获取到 `Libraries/AIDebug/`；源码和固定版本由原仓库管理，游戏只分享依赖声明和锁文件。
 
-关闭目标项目的编辑器，在本仓库根目录执行：
+普通使用者只需 Verso 更新完成后打开编辑器。编辑器自动编译 `Editor/` 入口，菜单无需安装步骤。首次启动调试时，入口用编辑器自带 Roslyn 编译 `Runtime/*.cs`，缓存到主项目 `.ai_debug/runtime-cache/`。不需要 .NET SDK、Visual Studio、PowerShell 或 NuGet 还原。
 
-```powershell
-& ./Sbox/Install.ps1 -Project 'C:/path/to/game' -Action Check
-& ./Sbox/Install.ps1 -Project 'C:/path/to/game' -DryRun
-& ./Sbox/Install.ps1 -Project 'C:/path/to/game' -Engine 'C:/path/to/sbox/game'
-& ./Sbox/Install.ps1 -Project 'C:/path/to/game' -Action Verify -Engine 'C:/path/to/sbox/game'
-```
+可自动生成的 `AIDebug.Sbox.dll` 不入 Git。必须预制的 Windows x64 原生 DLL、第三方运行依赖由 Git 提供，摘要记录在 `Editor/AIDebug/RuntimeFiles.json`。加载时检查完整性。引擎已有的 Roslyn 主程序集直接复用，不另行发布。
 
-安装器只使用 `Sbox/`，支持只检出这个目录。它不拉取代码、不切换 Git 版本；请由调用方先固定仓库提交。`Check` 和 `DryRun` 不修改项目，也不构建。默认安装先构建，再检查部署内容；本地修改或未知文件会拒绝覆盖，验证失败会恢复旧部署、忽略规则和安装记录。旧部署保留在项目 `Art/build/aidebug-installs/`。
+复制安装器已移除。更新由 Verso 完成，插件不获取自己的源码，也不向主项目 `Editor/` 安装第二份代码。主项目可通过自己的 `Metadata.Compiler.IgnoreFolders` 排除历史 `AIDebug` / `AIGuide` 部署目录；Library 的独立编译配置不受影响。
 
-Visual Studio 路径不同时，先显式构建，再用 `-NoBuild` 安装已有产物：
-
-```powershell
-& ./Sbox/Tools/Build.ps1 -Engine 'C:/path/to/sbox/game' -VsTools '你的VC目录/Auxiliary/Build/vcvars64.bat'
-& ./Sbox/Install.ps1 -Project 'C:/path/to/game' -NoBuild
-```
-
-项目中 `Editor/AIDebug/` 是部署副本，加入项目忽略规则；源码、通用手册和测试继续由本仓库 Git 管理。安装来源和文件摘要在本机 `.ai_debug/install.json`，不会替换游戏自己的配置。
+维护者开发时使用独立 Git 工作区或 Verso 依赖开发模式。原生适配层、测试夹具和第三方依赖更新由维护者构建、验证并提交；普通成员无需构建工具。
 
 ## 激活
 
@@ -106,11 +94,11 @@ flowchart LR
 ```powershell
 & ./Sbox/Tools/Build.ps1 -Engine 'C:/path/to/sbox/game'
 & dotnet build ./Sbox/Tests/SboxDebugFixture.csproj -c Release -o ./Sbox/Art/build/fixture
-& ./Sbox/Tools/Test-Install.ps1
+& ./Sbox/Tools/Test-Compatibility.ps1 -Engine 'C:/path/to/sbox/game'
 # 专用测试项目已启动并进入 Play，或独立游戏已连接并激活调试服务：
 & ./Sbox/Tools/Test-AIDebug.ps1 -Project 'C:/path/to/disposable-game'
 # 独立游戏没有 AIGuide 转发时：
 & ./Sbox/Tools/Test-AIDebug.ps1 -Project 'C:/path/to/disposable-game' -SkipGuide -Token '你的测试令牌'
 ```
 
-测试会创建运行时对象、修改控制状态、加载测试方法和原生 DLL，并写截图和小型转储。请使用专用测试项目；末尾重置补丁和控制状态，不宣称撤销任意游戏修改。安装器测试只使用自己的临时文件系统项目。
+测试会创建运行时对象、修改控制状态、加载测试方法和原生 DLL，并写截图和小型转储。请使用专用测试项目；末尾重置补丁和控制状态，不宣称撤销任意游戏修改。Library 与运行时兼容检查由维护者执行，普通同事无需这些步骤。

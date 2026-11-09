@@ -32,5 +32,10 @@ venv/
 
 /Sbox/Art/
 .ai_debug/
-/Sbox/Editor/AIDebug/Managed/
-/Sbox/Editor/AIDebug/Native/
+/Sbox/Editor/AIDebug/Managed/*
+!/Sbox/Editor/AIDebug/Managed/*.dll
+/Sbox/Editor/AIDebug/Managed/AIDebug.Sbox.dll
+/Sbox/Editor/AIDebug/Managed/Microsoft.CodeAnalysis.dll
+/Sbox/Editor/AIDebug/Managed/Microsoft.CodeAnalysis.CSharp.dll
+/Sbox/Editor/AIDebug/Native/*
+!/Sbox/Editor/AIDebug/Native/aidebug_native.dll

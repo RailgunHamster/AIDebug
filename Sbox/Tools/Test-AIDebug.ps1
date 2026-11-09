@@ -1,5 +1,5 @@
 #Requires -Version 7.0
-param([Parameter(Mandatory)][string]$Project,[string]$BaseUrl='http://127.0.0.1:7651/mcp',[string]$Token='',[string]$ResultsPath,[switch]$SkipGuide)
+param([Parameter(Mandatory)][string]$Project,[string]$BaseUrl='http://127.0.0.1:7651/mcp',[string]$Token='',[string]$ResultsPath,[switch]$SkipGuide,[string]$GuideBaseUrl='http://127.0.0.1:7660/mcp')
 $ErrorActionPreference='Stop'
 $package=(Resolve-Path "$PSScriptRoot/..").Path
 $projectRoot=(Resolve-Path -LiteralPath $Project).Path
@@ -35,6 +35,7 @@ $target='SboxDebugFixture.Probe:Add(System.Int32)'
 try{
     Test 'MCP handshake and 19 generic schemas' {$info=Rpc initialize @{protocolVersion='2025-11-25'};Assert ($info.serverInfo.name -eq 'sbox-ai-debug') 'server name';$tools=(Rpc 'tools/list').tools;Assert ($tools.Count -eq 19) 'tool count';Assert (!@($tools|Where-Object {$_.name -match 'snapshot|input_|eval_gd|run_gd'}).Count) 'Removed or unsupported tool exposed'}
     Test 'runtime identity and independent project' {$info=Tool info;Assert ($info.playing -and $info.project.Equals($projectRoot,[StringComparison]::OrdinalIgnoreCase)) 'Wrong runtime project';Assert ((Tool tree @{depth=1}).children.Count -gt 0) 'tree'}
+    Test 'runtime C# is compiled into the local cache' {Assert (Eval 'typeof(AIDebug.Sbox.RuntimeService).Assembly.Location.Contains("runtime-cache")') 'runtime was not built by the editor';Assert (!(Test-Path -LiteralPath "$projectRoot/Libraries/AIDebug/Editor/AIDebug/Managed/AIDebug.Sbox.dll")) 'runtime binary shipped inside the Library'}
     Test 'scene helpers and persistent C# session' {Assert ((Eval 'int fixtureSession=40; fixtureSession+2') -eq 42) 'session declare';Assert ((Eval 'fixtureSession+=1; fixtureSession') -eq 41) 'session continuation';Assert (Eval 'Root!=null && FindAll<CameraComponent>().Any()') 'scene helper'}
     Test 'async main-thread continuation' {Assert (Eval 'var beforeThread=Environment.CurrentManagedThreadId;await Task.Delay(30);return beforeThread==Environment.CurrentManagedThreadId && Root!=null;') 'continuation left game thread'}
     Test 'worker evaluation and scene guard' {Assert ((Eval '6*7' @{thread='worker'}) -eq 42) 'worker value';$r=RawTool eval_cs @{thread='worker';code='Root.Name'};Assert (!$r.ok -and $r.error -like '*require thread:main*') 'worker scene access was accepted'}
@@ -58,7 +59,20 @@ try{
         $pending=Start-Rpc 'tools/call' @{name='eval_cs';arguments=@{thread='worker';code='await Task.Delay(500);return 9;';timeout_ms=3000}}
         Start-Sleep -Milliseconds 100;$busy=RawTool eval_cs @{code='1+1'};Assert $busy.busy 'Concurrent eval was not busy';Assert (((Finish-Rpc $pending).content[0].text|ConvertFrom-Json).result -eq 9) 'pending result'
         $timeout=RawTool eval_cs @{thread='worker';code='System.Threading.Thread.Sleep(400);return 5;';timeout_ms=50};Assert (!$timeout.ok -and $timeout.timeout) 'deadline response'
-        $reset=Tool reset;Assert $reset.execution_may_continue 'Ignoring cancellation must be reported';Assert (RawTool eval_cs @{code='1+1'}).busy 'Reset opened a second execution slot';Start-Sleep -Milliseconds 500;Assert ((Eval '40+2') -eq 42) 'slot did not recover'
+        Tool reset;Start-Sleep -Milliseconds 500;Assert ((Eval '40+2') -eq 42) 'slot did not recover'
+    }
+    Test 'reset retains the execution slot while user code ignores cancellation' {
+        $marker=Join-Path $projectRoot ('.ai_debug/execution-'+[guid]::NewGuid().ToString('N')+'.txt')
+        $code='System.IO.File.WriteAllText(@"'+$marker.Replace('"','""')+'","started");System.Threading.Thread.Sleep(2000);return 5;'
+        $pending=Start-Rpc 'tools/call' @{name='eval_cs';arguments=@{thread='worker';code=$code;timeout_ms=10000}}
+        $until=[DateTime]::UtcNow.AddSeconds(5)
+        while(!(Test-Path -LiteralPath $marker) -and [DateTime]::UtcNow -lt $until){Start-Sleep -Milliseconds 20}
+        Assert (Test-Path -LiteralPath $marker) 'user code did not start'
+        $reset=Tool reset;Assert $reset.execution_may_continue 'Ignoring cancellation must be reported'
+        Assert (RawTool eval_cs @{code='1+1'}).busy 'Reset opened a second execution slot'
+        $null=Finish-Rpc $pending;Start-Sleep -Milliseconds 2200
+        Assert ((Eval '40+2') -eq 42) 'slot did not recover'
+        Remove-Item -LiteralPath $marker
     }
     Test 'reset clears patches and controls but preserves gameplay edits' {Tool patch_cs @{target=$target;kind='replace';code='return 99;'};Tool hook_native @{symbol='native_fixture.dll!probe_integer';mode='return_const';return_const=55};Tool pause @{paused=$true};Tool time_scale @{scale=0.25};Tool reset;Assert (@((Tool list_patches).patches).Count -eq 0) 'managed reset';Assert (@((Tool list_native_hooks).hooks).Count -eq 0) 'native reset';Assert ((Tool get @{node='AIDebugFixtureRenamed';property='Name'}).value -eq 'AIDebugFixtureRenamed') 'Reset rolled back arbitrary gameplay state'}
     Test 'HTTP origin, host, method and optional token checks' {
@@ -69,7 +83,7 @@ try{
         Assert ((Invoke-WebRequest $BaseUrl -Method Get -Headers $headers -SkipHttpErrorCheck).StatusCode -eq 405) 'GET'
         if($Token){Assert ((Invoke-WebRequest $BaseUrl -Method Post -Body $body -SkipHttpErrorCheck).StatusCode -eq 401) 'Token'}
     }
-    if(!$SkipGuide){Test 'optional AI Guide forwarding' {$body=@{jsonrpc='2.0';id=1;method='tools/call';params=@{name='ai_debug_info';arguments=@{}}}|ConvertTo-Json -Depth 8;$r=Invoke-RestMethod 'http://127.0.0.1:7660/mcp' -Method Post -ContentType application/json -Body $body;Assert (($r.result.content[0].text|ConvertFrom-Json).pid -eq (Tool info).pid) 'Guide forwarding'}}
+    if(!$SkipGuide){Test 'optional AI Guide forwarding' {$body=@{jsonrpc='2.0';id=1;method='tools/call';params=@{name='ai_debug_info';arguments=@{}}}|ConvertTo-Json -Depth 8;$r=Invoke-RestMethod $GuideBaseUrl -Method Post -ContentType application/json -Body $body;Assert (($r.result.content[0].text|ConvertFrom-Json).pid -eq (Tool info).pid) 'Guide forwarding'}}
 }finally{
     try{Tool reset|Out-Null}catch{}
     $http.Dispose()

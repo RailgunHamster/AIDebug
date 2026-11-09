@@ -1,0 +1,4 @@
+/Editor/*.csproj
+/Editor/Properties/launchSettings.json
+/.sbox/
+/.vscode/

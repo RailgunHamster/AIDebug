@@ -10,7 +10,7 @@ namespace AIDebug.Sbox;
 /// <summary>Trusted, explicitly activated debugger; no project gameplay interfaces or engine patches.</summary>
 public static class RuntimeService
 {
-    public const string Version="0.1.0";
+    public const string Version="0.2.0";
     private static DebugTransport? transport;
     private static string project="", token="";
     private static int port;
@@ -28,6 +28,7 @@ public static class RuntimeService
     private static readonly Logger logger=new("AI Debug");
     public static bool Active=>transport!=null;
     internal static string Root=>project;
+    internal static string Library { get; private set; }="";
     internal static string Token=>token;
     internal static string Data=>Path.Combine(project,".ai_debug");
     internal static IDisposable GameScope()=>(IDisposable)typeof(Game).Assembly.GetType("Sandbox.Engine.GlobalContext",true)!.GetMethod("GameScope",BindingFlags.Public|BindingFlags.Static)!.Invoke(null,null)!;
@@ -51,11 +52,12 @@ public static class RuntimeService
         public override void Post(SendOrPostCallback callback,object? state){_=Task.Run(()=>Main(()=>Run(()=>{callback(state);return true;})));}
         public override SynchronizationContext CreateCopy()=>this;
     }
-    public static string Start(string projectRoot,int listenPort=7651,string bearerToken="")
+    public static string Start(string projectRoot,int listenPort=7651,string bearerToken="",string libraryRoot="")
     {
         if(Active){if(!project.Equals(Path.GetFullPath(projectRoot),StringComparison.OrdinalIgnoreCase)||port!=listenPort)throw new InvalidOperationException("A different debug session is already active");return Status();}
         if(!OperatingSystem.IsWindows()||!Environment.Is64BitProcess)throw new PlatformNotSupportedException("The s&box adapter currently targets Windows x64");
         project=Path.GetFullPath(projectRoot);token=bearerToken;port=listenPort;
+        Library=Path.GetFullPath(string.IsNullOrEmpty(libraryRoot)?Path.Combine(project,"Libraries","AIDebug"):libraryRoot);
         if(!Directory.EnumerateFiles(project,"*.sbproj").Any())throw new ArgumentException("Not an s&box project");
         using var game=GameScope();
         Agent.Start(Data);AIDebugGlobals.SceneProvider=()=>Game.IsPlaying?Game.ActiveScene:null;AIDebugGlobals.Logger=s=>logger.Info(s);
@@ -71,7 +73,7 @@ public static class RuntimeService
         return Status();
     }
     public static string Status()=>new JsonObject{["active"]=Active,["pid"]=Environment.ProcessId,["project"]=project,["url"]=Active?$"http://127.0.0.1:{port}/mcp":null,["version"]=Version}.ToJsonString();
-    internal static JsonArray Definitions()=>JsonNode.Parse(File.ReadAllText(Path.Combine(project,"Editor","AIDebug","ToolDefinitions.json")))!.AsArray();
+    internal static JsonArray Definitions()=>JsonNode.Parse(File.ReadAllText(Path.Combine(Library,"Editor","AIDebug","ToolDefinitions.json")))!.AsArray();
     private static void CaptureRunState(){if(capturedScene==null&&Game.IsPlaying&&Game.ActiveScene is {} scene){capturedScene=scene;initialPaused=Game.IsPaused;initialScale=scene.TimeScale;}}
     private static void SubscribeLogs()
     {

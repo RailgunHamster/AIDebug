@@ -1,0 +1,18 @@
+{
+  "Title": "AI Debug",
+  "Type": "library",
+  "Org": "railgunhamster",
+  "Ident": "aidebug",
+  "Schema": 1,
+  "IncludeSourceFiles": false,
+  "Resources": null,
+  "PublishUsedAssetsOnly": false,
+  "PackageReferences": [],
+  "EditorReferences": [],
+  "Mounts": null,
+  "IsStandaloneOnly": false,
+  "AI": {
+    "EnableMcpCommunication": true
+  },
+  "Metadata": {}
+}

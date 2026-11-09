@@ -18,8 +18,8 @@ internal static class NativeBridge
     private static T Export<T>(string name) where T:Delegate=>Marshal.GetDelegateForFunctionPointer<T>(NativeLibrary.GetExport(module,"aidbg_"+name));
     private static void Load(){
         if(module!=IntPtr.Zero)return;
-        var source=Path.Combine(RuntimeService.Root,"Editor","AIDebug","Native","aidebug_native.dll");
-        if(!File.Exists(source))throw new FileNotFoundException("Build and reinstall the AIDebug Sbox native adapter",source);
+        var source=Path.Combine(RuntimeService.Library,"Editor","AIDebug","Native","aidebug_native.dll");
+        if(!File.Exists(source))throw new FileNotFoundException("AI Debug native adapter is missing. Finish the Verso project update.",source);
         var hash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(source)))[..16];
         var dir=Path.Combine(RuntimeService.Data,"native-cache",hash);Directory.CreateDirectory(dir);var path=Path.Combine(dir,"aidebug_native.dll");if(!File.Exists(path))File.Copy(source,path);
         module=NativeLibrary.Load(path);error=Export<Error>("error");resolve=Export<Resolve>("resolve");create=Export<Create>("hook");remove=Export<Remove>("unhook");count=Export<Count>("count");read=Export<ReadLogs>("logs");dump=Export<WriteDump>("dump");

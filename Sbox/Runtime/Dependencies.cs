@@ -12,6 +12,8 @@ internal static class Dependencies
     internal static void Initialize()
     {
         var directory=Path.GetDirectoryName(typeof(Dependencies).Assembly.Location)!;
+        var receipt=Path.Combine(directory,"dependencies.path");
+        if(File.Exists(receipt))directory=File.ReadAllText(receipt).Trim();
         AssemblyLoadContext.Default.Resolving+=(_,name)=>{
             var path=Path.Combine(directory,name.Name+".dll");
             return File.Exists(path)?AssemblyLoadContext.Default.LoadFromAssemblyPath(path):null;

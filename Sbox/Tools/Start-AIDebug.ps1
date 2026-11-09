@@ -20,12 +20,34 @@ do{
     Start-Sleep -Milliseconds 500
 }while([DateTime]::UtcNow -lt $deadline)
 if($state.Kind -eq 'game' -and ($state.IsLoading -or !$state.ActiveScene)){throw 'The game did not become ready before the attachment deadline'}
-$directory=Join-Path $root 'Editor/AIDebug/Managed'
-$escaped=$directory.Replace('"','""');$escapedRoot=$root.Replace('"','""');$escapedToken=$Token.Replace('"','""')
+$manifest=Join-Path $root '.verso-dependencies.json'
+$target='Libraries/AIDebug'
+if(Test-Path -LiteralPath $manifest){$definition=(Get-Content -LiteralPath $manifest -Raw|ConvertFrom-Json).dependencies|Where-Object id -eq 'aidebug';if($definition){$target=$definition.targetPath}}
+$library=[IO.Path]::GetFullPath((Join-Path $root $target))
+if(!$library.StartsWith($root+[IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)){throw 'Library path escapes project'}
+$builder=Join-Path $library 'Editor/AIDebug/DebugRuntimeCompiler.cs'
+if(!(Test-Path -LiteralPath $builder)){throw 'Finish the Verso update before attaching AI Debug'}
+$escaped=$builder.Replace('"','""');$escapedLibrary=$library.Replace('"','""');$escapedRoot=$root.Replace('"','""');$escapedToken=$Token.Replace('"','""')
 $code=@"
-var dir=@"$escaped";
-var assembly=AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>a.GetName().Name=="AIDebug.Sbox")??System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(System.IO.Path.Combine(dir,"AIDebug.Sbox.dll"));
-return assembly.GetType("AIDebug.Sbox.RuntimeService",true).GetMethod("Start").Invoke(null,new object[]{@"$escapedRoot",$Port,@"$escapedToken"});
+var paths=new System.Collections.Generic.Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
+foreach(var file in ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")??"").Split(System.IO.Path.PathSeparator)){
+ if(!file.EndsWith(".dll",StringComparison.OrdinalIgnoreCase)||!System.IO.File.Exists(file))continue;
+ try{System.Reflection.AssemblyName.GetAssemblyName(file);paths.TryAdd(System.IO.Path.GetFileName(file),file);}catch(BadImageFormatException){}
+}
+var sdk=System.IO.Path.GetDirectoryName(typeof(Sandbox.Scene).Assembly.Location);
+foreach(var name in new[]{"Sandbox.Engine","Sandbox.System","Sandbox.Reflection","Microsoft.CodeAnalysis","Microsoft.CodeAnalysis.CSharp"}){
+ var file=System.IO.Path.Combine(sdk,name+".dll");if(System.IO.File.Exists(file))paths[System.IO.Path.GetFileName(file)]=file;
+}
+var syntax=Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(System.IO.File.ReadAllText(@"$escaped"));
+var options=new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary);
+var compile=Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create("AIDebug.RuntimeBuilder."+Guid.NewGuid().ToString("N"),new[]{syntax},paths.Values.Select(p=>Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(p)),options);
+using var bytes=new System.IO.MemoryStream();var emitted=compile.Emit(bytes);
+if(!emitted.Success)throw new InvalidOperationException(string.Join("\n",emitted.Diagnostics));
+var helper=System.Reflection.Assembly.Load(bytes.ToArray()).GetType("AIDebug.Sbox.EditorIntegration.DebugRuntimeCompiler",true);
+var runtime=(string)helper.GetMethod("Prepare",System.Reflection.BindingFlags.Static|System.Reflection.BindingFlags.NonPublic).Invoke(null,new object[]{@"$escapedLibrary",@"$escapedRoot"});
+var assembly=AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a=>a.GetName().Name=="AIDebug.Sbox")??System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(runtime);
+if(!System.IO.Path.GetFullPath(assembly.Location).Equals(runtime,StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("Restart the target to load updated AI Debug sources");
+return assembly.GetType("AIDebug.Sbox.RuntimeService",true).GetMethod("Start").Invoke(null,new object[]{@"$escapedRoot",$Port,@"$escapedToken",@"$escapedLibrary"});
 "@
 $argsJson=@{code=$code}|ConvertTo-Json -Compress
 & $cli --connect $TargetPid --call run_csharp $argsJson
