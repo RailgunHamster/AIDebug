@@ -2,9 +2,15 @@
 
 `Godot/modules/ai_debug` 为正在运行的 Godot 项目提供场景检查、代码求值、运行控制与方法补丁。基础能力使用 Godot Variant API，不要求项目安装插件、继承特定基类或实现业务接口。C# 求值与补丁需要 .NET 引擎及 `Godot.AIDebug.dll`。
 
-## 安装方式
+## 直接使用：无需项目安装
 
-当前补丁适配 **Godot 4.8-beta2**，官方基线提交为 `cafc17a192acf67903910a68aeb3c076c0907a4b`。引擎补丁的范围和校验规则见 [patches/README.md](patches/README.md)。C# 能力需要 .NET 10 SDK；原生引擎构建需要 Git、Python 3.10+、uv，以及 Godot 对应平台的编译工具和 SDK。本机验证使用 Windows x64 / Visual Studio。
+使用已集成 AIDebug 的 Godot 编辑器或 Debug 模板打开项目即可。当前工作区引擎已完成接入；GDScript、C# 项目均无需添加项目插件、实现业务接口或创建 C# 宿主。按 `Ctrl+Alt+Shift+F12`，或按下方“激活”说明开启服务。服务默认关闭，激活不等于安装。
+
+调试程序集随集成引擎一起提供。普通项目成员无需 Python、.NET SDK 或原生编译工具来使用它；.NET 能力需要引擎对应的 .NET 运行时。官方 Godot 发行版不包含本源码模块，单独检出仓库不会为官方二进制添加功能。
+
+## 引擎维护者：源码构建
+
+以下步骤仅用于引擎维护者构建并分发集成版本，项目成员无需执行。当前补丁适配 **Godot 4.8-beta2**，官方基线提交为 `cafc17a192acf67903910a68aeb3c076c0907a4b`。引擎补丁的范围和校验规则见 [patches/README.md](patches/README.md)。维护者需要 .NET 10 SDK、Git、Python 3.10+、uv，以及 Godot 对应平台的编译工具和 SDK。本机验证使用 Windows x64 / Visual Studio。
 
 推荐将两个仓库并列放置：
 
@@ -26,18 +32,15 @@ workspace/
 ```powershell
 # 只检查，不修改文件：
 python Godot/install.py check --engine "../engine"
-python Godot/install.py install --engine "../engine" --dry-run
-
-# 安装及完整构建 .NET 编辑器、胶水与程序集：
-python Godot/install.py install --engine "../engine"
+# 完整构建命令自动完成适配接入、路径配置、.NET 编辑器、胶水与程序集：
 python Godot/install.py build --engine "../engine" --jobs 28
 ```
 
 安装工具识别已经应用的补丁，保留已有 `custom.py` 配置，并加入一个可重复更新的 `custom_modules` 配置块。模块使用仓库里的源码参与构建；无需复制到引擎的 `modules/` 下，也不建立目录链接。已有另一个 `engine/modules/ai_debug` 时会拒绝覆盖，需先自行迁出。
 
-本机路径记录在引擎的 `.ai_debug-install.json` 和被引擎忽略的 `custom.py` 中；不应提交这些本地路径。仓库移动后重新运行 `install` 更新路径。脚本不自动获取新版本、不切换 Git 分支。引擎未知改动、补丁部分应用或版本不兼容时会拒绝安装，写入失败会恢复本次修改的文件。
+本机路径记录在引擎的 `.ai_debug-install.json` 和被引擎忽略的 `custom.py` 中；不应提交这些本地路径。维护者移动源码仓库后重新运行 `build` 会更新路径。脚本不自动获取新版本、不切换 Git 分支。引擎未知改动、补丁部分应用或版本不兼容时会拒绝接入，写入失败会恢复本次修改的文件。
 
-首次安装完成后，按需要使用增量命令：
+维护者后续按需要使用增量命令：
 
 ```powershell
 # 只重新编译原生编辑器：
@@ -65,7 +68,7 @@ python Godot/install.py build --engine "../engine" --target template_debug
 
 项目存档、业务状态序列化和输入录制回放已从核心移除。旧的 `snapshot_*`、`input_record_*`、`input_play`、`input_status` 工具不再提供；项目无需实现 `IAIDebugSnapshot` 或保存／恢复方法。已有快照文件不会自动删除。需要复现业务现场时，由独立的项目测试工具负责保存状态和驱动输入。
 
-## 接入与激活
+## 激活
 
 独立运行时，游戏进程直接提供 HTTP 入口：
 
@@ -130,7 +133,7 @@ python Godot/install.py test --engine "../engine"
 python Godot/install.py test --engine "../engine" --bridge
 ```
 
-桥接测试需要空闲的 7650、7651 端口，以及已安装内置 AIGuide 的 .NET 编辑器。运行时测试创建独立的临时项目，覆盖工具范围、GDScript/属性访问、C# 会话与异步执行、并发连接关联、执行槽忙、超时后重置、后台任务运行时退出、补丁撤销与 HTTP 非法请求。桥接模式额外检查 AIGuide 的工具 schema 和实际转发。
+桥接测试需要空闲的 7650、7651 端口，以及已集成内置 AIGuide 的 .NET 编辑器。运行时测试创建没有项目插件或 `.csproj` 的独立临时 GDScript 项目，直接激活内置模块，覆盖免安装入口、工具范围、GDScript/属性访问、C# 会话与异步执行、并发连接关联、执行槽忙、超时后重置、后台任务运行时退出、补丁撤销与 HTTP 非法请求。桥接模式额外检查 AIGuide 的工具 schema 和实际转发。
 
 Windows x64 开发者命令行可将 `Godot/tests/native_fixture.c` 编译成 DLL，再添加 `--native-dll <DLL绝对路径>`，验证四个 double 参数穿过原生日志跳板后的值。测试只检查自己创建的临时项目，并在结束后清理。
 

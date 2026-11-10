@@ -1,4 +1,4 @@
-"""Install this checkout's Godot module and its versioned engine integration."""
+"""Source-engine maintainer helper; users run the integrated engine without project installation."""
 
 from __future__ import annotations
 

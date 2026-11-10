@@ -1,4 +1,4 @@
-"""Integration regressions against a built .NET Godot executable.
+"""No-project-installation regressions against a built .NET Godot executable.
 
 GODOT_AI_DEBUG_TEST_ENGINE selects the executable. Optional
 GODOT_AI_DEBUG_TEST_NATIVE_DLL enables the Windows x64 ABI regression.
@@ -185,6 +185,12 @@ class RuntimeTests(unittest.TestCase):
         with urllib.request.urlopen(request, timeout=10) as response:
             forwarded_info = json.loads(json.load(response)["result"]["content"][0]["text"])
         self.assertEqual(forwarded_info["project_name"], "AIDebugTest-" + self.token)
+
+    def test_builtin_requires_no_project_installation(self):
+        self.assertFalse((self.project / "addons").exists())
+        self.assertFalse(list(self.project.glob("*.csproj")))
+        self.assertNotIn("[editor_plugins]", (self.project / "project.godot").read_text())
+        self.assertEqual(self.tool("eval_cs", code="return 6 * 7;")["result"], 42)
 
     def test_gd_and_properties(self):
         self.assertEqual(self.tool("eval_gd", expression="value + 1", self="/root/Probe")["result"], 43)
