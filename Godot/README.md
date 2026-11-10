@@ -116,12 +116,16 @@ python Godot/tests/test_runtime.py
 # 额外验证编辑器桥和内置 AIGuide 的 7650 转发：
 $env:GODOT_AI_DEBUG_TEST_BRIDGE = "1"
 python Godot/tests/test_runtime.py
+# 空编辑器、游戏停止后、调试会话仍活跃时的正常退出与连接清理：
+python Godot/tests/test_editor_lifecycle.py
 # 引擎维护者验证补丁在官方基线上的适用性和模块构建路径：
 $env:GODOT_AI_DEBUG_SOURCE = (Resolve-Path "../engine").Path
 python Godot/tests/test_engine_patch.py
 ```
 
 桥接测试需要空闲的 7650、7651 端口，以及已集成内置 AIGuide 的 .NET 编辑器。运行时测试创建没有项目插件或 `.csproj` 的独立临时 GDScript 项目，直接激活内置模块，覆盖免安装入口、工具范围、GDScript/属性访问、C# 会话与异步执行、并发连接关联、执行槽忙、超时后重置、后台任务运行时退出、补丁撤销与 HTTP 非法请求。桥接模式额外检查 AIGuide 的工具 schema 和实际转发。
+
+`test_editor_lifecycle.py` 不依赖 AIGuide，检查编辑器退出码、错误日志、调试会话和未完成 HTTP 连接的释放。其会话用例需要空闲的 7651 端口，并只创建、停止测试自己的进程。
 
 Windows x64 开发者命令行可将 `Godot/tests/native_fixture.c` 编译成 DLL，再设置 `GODOT_AI_DEBUG_TEST_NATIVE_DLL` 为该 DLL 的绝对路径，验证四个 double 参数穿过原生日志跳板后的值。测试只检查自己创建的临时项目，并在结束后清理。
 

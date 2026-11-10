@@ -22,9 +22,6 @@
 #endif
 
 static AIDebugServer *ai_debug_server = nullptr;
-#ifdef TOOLS_ENABLED
-static Ref<AIDebugEditorDebuggerPlugin> ai_debug_debugger_plugin;
-#endif
 
 #ifdef TOOLS_ENABLED
 static void _ai_debug_editor_init() {
@@ -34,8 +31,11 @@ static void _ai_debug_editor_init() {
 		EditorExport::get_singleton()->add_export_plugin(export_plugin);
 	}
 	if (EditorDebuggerNode::get_singleton()) {
-		ai_debug_debugger_plugin.instantiate();
-		EditorDebuggerNode::get_singleton()->add_debugger_plugin(ai_debug_debugger_plugin);
+		// The debugger node owns the plugin and releases it with the editor.
+		// Module shutdown runs after the editor and its singleton have been destroyed.
+		Ref<AIDebugEditorDebuggerPlugin> debugger_plugin;
+		debugger_plugin.instantiate();
+		EditorDebuggerNode::get_singleton()->add_debugger_plugin(debugger_plugin);
 	}
 }
 #endif
@@ -57,14 +57,6 @@ void initialize_ai_debug_module(ModuleInitializationLevel p_level) {
 
 void uninitialize_ai_debug_module(ModuleInitializationLevel p_level) {
 	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
-#ifdef TOOLS_ENABLED
-		if (ai_debug_debugger_plugin.is_valid()) {
-			if (EditorDebuggerNode::get_singleton()) {
-				EditorDebuggerNode::get_singleton()->remove_debugger_plugin(ai_debug_debugger_plugin);
-			}
-			ai_debug_debugger_plugin.unref();
-		}
-#endif
 		if (ai_debug_server) {
 			memdelete(ai_debug_server);
 			ai_debug_server = nullptr;
