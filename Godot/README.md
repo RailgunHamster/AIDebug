@@ -10,48 +10,34 @@
 
 ## 引擎维护者：源码构建
 
-以下步骤仅用于引擎维护者构建并分发集成版本，项目成员无需执行。当前补丁适配 **Godot 4.8-beta2**，官方基线提交为 `cafc17a192acf67903910a68aeb3c076c0907a4b`。引擎补丁的范围和校验规则见 [patches/README.md](patches/README.md)。维护者需要 .NET 10 SDK、Git、Python 3.10+、uv，以及 Godot 对应平台的编译工具和 SDK。本机验证使用 Windows x64 / Visual Studio。
+以下步骤仅用于引擎维护者构建并分发集成版本，项目成员无需执行。当前补丁适配 **Godot 4.8-beta2**，官方基线提交为 `cafc17a192acf67903910a68aeb3c076c0907a4b`。引擎补丁的范围和维护说明见 [patches/README.md](patches/README.md)。维护者需要 .NET 10 SDK、Git、Python 3.10+、uv，以及 Godot 对应平台的编译工具和 SDK。本机验证使用 Windows x64 / Visual Studio。
 
-推荐将两个仓库并列放置：
+引擎通过 `custom_modules` 引用本仓库的 `Godot/modules`，保持模块源码独立。示例目录：
 
 ```text
 workspace/
 ├── engine/                      # Godot 源码
 └── AIDebug/                     # 本仓库，可稀疏检出 Godot/
     └── Godot/
-        ├── install.py
-        ├── compatibility.json
         ├── modules/ai_debug/
         ├── patches/
         ├── tools/aidbg/
         └── tests/
 ```
 
-以下命令均在 **AIDebug 仓库根目录**执行：
+以下命令在**已经接入模块的 Godot 源码根目录**执行。外部模块位置由构建参数提供，托管构建使用同一个源码目录：
 
 ```powershell
-# 只检查，不修改文件：
-python Godot/install.py check --engine "../engine"
-# 完整构建命令自动完成适配接入、路径配置、.NET 编辑器、胶水与程序集：
-python Godot/install.py build --engine "../engine" --jobs 28
+$moduleRoot = (Resolve-Path "../AIDebug/Godot/modules").Path
+$env:GODOT_AI_DEBUG_MODULE_DIR = Join-Path $moduleRoot "ai_debug"
+uvx scons -j28 platform=windows target=editor module_mono_enabled=yes accesskit=no "custom_modules=$moduleRoot"
+& ./bin/godot.windows.editor.x86_64.mono.exe --headless --generate-mono-glue modules/mono/glue
+python modules/mono/build_scripts/build_assemblies.py --godot-output-dir=bin
 ```
 
-安装工具识别已经应用的补丁，保留已有 `custom.py` 配置，并加入一个可重复更新的 `custom_modules` 配置块。模块使用仓库里的源码参与构建；无需复制到引擎的 `modules/` 下，也不建立目录链接。已有另一个 `engine/modules/ai_debug` 时会拒绝覆盖，需先自行迁出。
+引擎存在其他外部模块时，将它们一并放入 `custom_modules` 的逗号分隔列表。已有固定构建配置时也可沿用该配置。构建不向游戏项目写插件或 C# 宿主。
 
-本机路径记录在引擎的 `.ai_debug-install.json` 和被引擎忽略的 `custom.py` 中；不应提交这些本地路径。维护者移动源码仓库后重新运行 `build` 会更新路径。脚本不自动获取新版本、不切换 Git 分支。引擎未知改动、补丁部分应用或版本不兼容时会拒绝接入，写入失败会恢复本次修改的文件。
-
-维护者后续按需要使用增量命令：
-
-```powershell
-# 只重新编译原生编辑器：
-python Godot/install.py build --engine "../engine" --native-only
-# 只重新构建并部署调试程序集及已有的 AIGuide 内置程序集：
-python Godot/install.py build --engine "../engine" --managed-only
-# 编译带调试模块的 .NET Debug 导出模板：
-python Godot/install.py build --engine "../engine" --target template_debug
-```
-
-完整 `build` 会调用引擎原有的胶水和程序集构建工具。`template_debug` 构建需要先完成编辑器构建。此安装器不安装 AIGuide 插件；已有引擎内置 AIGuide 时，会向它传入模块路径来共享工具定义。
+只修改托管代码时，重跑 `build_assemblies.py` 即可；Debug 导出模板将 SCons 的 `target` 改为 `template_debug`。模板构建前需完成编辑器及托管程序集构建。已有引擎内置 AIGuide 时，引擎的托管构建配置同时传入 `AIDebugModuleDir`，用于共享工具定义。
 
 ## 范围
 
@@ -123,19 +109,21 @@ while (hasMoreWork)
 从 AIDebug 仓库根目录执行：
 
 ```powershell
-# 干净源码安装、重复执行、保留配置、冲突拒绝与失败回滚：
-$env:GODOT_AI_DEBUG_TEST_SOURCE = (Resolve-Path "../engine").Path
-python Godot/tests/test_install.py
-
-# 当前已构建编辑器的直连路径：
-python Godot/install.py test --engine "../engine"
-# 编辑器桥以及已有 AIGuide 的 7650 转发：
-python Godot/install.py test --engine "../engine" --bridge
+# 指向已经构建的集成版 .NET 编辑器，直接验证运行时：
+$env:GODOT_AI_DEBUG_TEST_ENGINE = (Resolve-Path "../engine/bin/godot.windows.editor.x86_64.mono.exe").Path
+$env:GODOT_AI_DEBUG_TEST_BRIDGE = "0"
+python Godot/tests/test_runtime.py
+# 额外验证编辑器桥和内置 AIGuide 的 7650 转发：
+$env:GODOT_AI_DEBUG_TEST_BRIDGE = "1"
+python Godot/tests/test_runtime.py
+# 引擎维护者验证补丁在官方基线上的适用性和模块构建路径：
+$env:GODOT_AI_DEBUG_SOURCE = (Resolve-Path "../engine").Path
+python Godot/tests/test_engine_patch.py
 ```
 
 桥接测试需要空闲的 7650、7651 端口，以及已集成内置 AIGuide 的 .NET 编辑器。运行时测试创建没有项目插件或 `.csproj` 的独立临时 GDScript 项目，直接激活内置模块，覆盖免安装入口、工具范围、GDScript/属性访问、C# 会话与异步执行、并发连接关联、执行槽忙、超时后重置、后台任务运行时退出、补丁撤销与 HTTP 非法请求。桥接模式额外检查 AIGuide 的工具 schema 和实际转发。
 
-Windows x64 开发者命令行可将 `Godot/tests/native_fixture.c` 编译成 DLL，再添加 `--native-dll <DLL绝对路径>`，验证四个 double 参数穿过原生日志跳板后的值。测试只检查自己创建的临时项目，并在结束后清理。
+Windows x64 开发者命令行可将 `Godot/tests/native_fixture.c` 编译成 DLL，再设置 `GODOT_AI_DEBUG_TEST_NATIVE_DLL` 为该 DLL 的绝对路径，验证四个 double 参数穿过原生日志跳板后的值。测试只检查自己创建的临时项目，并在结束后清理。
 
 ## 命令行客户端
 

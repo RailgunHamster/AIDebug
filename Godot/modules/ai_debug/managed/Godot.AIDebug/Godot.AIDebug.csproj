@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <Target Name="ValidateGodotSourceRoot" BeforeTargets="PrepareForBuild">
-    <Error Condition="!Exists('$(GodotSourceRoot)/modules/mono/glue/GodotSharp/GodotSharp/GodotSharp.csproj')" Text="Set /p:GodotSourceRoot to the Godot source directory, or use Godot/install.py build." />
+    <Error Condition="!Exists('$(GodotSourceRoot)/modules/mono/glue/GodotSharp/GodotSharp/GodotSharp.csproj')" Text="Set /p:GodotSourceRoot to the integrated Godot source directory." />
   </Target>
 
   <ItemGroup>

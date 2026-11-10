@@ -10,13 +10,13 @@
 
 可自动生成的 `AIDebug.Sbox.dll` 不入 Git。必须预制的 Windows x64 原生 DLL、第三方运行依赖由 Git 提供，摘要记录在 `Editor/AIDebug/RuntimeFiles.json`。加载时检查完整性。引擎已有的 Roslyn 主程序集直接复用，不另行发布。
 
-复制安装器已移除。更新由 Verso 完成，插件不获取自己的源码，也不向主项目 `Editor/` 安装第二份代码。主项目可通过自己的 `Metadata.Compiler.IgnoreFolders` 排除历史 `AIDebug` / `AIGuide` 部署目录；Library 的独立编译配置不受影响。
+更新由 Verso 完成，插件源码由 Library 独立管理。主项目可通过自己的 `Metadata.Compiler.IgnoreFolders` 排除历史 `AIDebug` / `AIGuide` 部署目录；Library 的独立编译配置不受影响。
 
 维护者开发时使用独立 Git 工作区或 Verso 依赖开发模式。原生适配层、测试夹具和第三方依赖更新由维护者构建、验证并提交；普通成员无需构建工具。
 
 ## 激活
 
-默认不监听端口。编辑器中从顶部 **AI Debug → 启动本地调试** 激活，也可用 `Ctrl+Alt+Shift+F12` 或 `sbox-cli --call aidebug_start`。进入 Play 后可以检查实际游戏场景；`aidebug_stop` 重置并停止服务。仅安装插件不会加载调试程序集；编辑器只保留启动配置检查。
+默认不监听端口。编辑器中从顶部 **AI Debug → 启动本地调试** 激活，也可用 `Ctrl+Alt+Shift+F12` 或 `sbox-cli --call aidebug_start`。进入 Play 后可以检查实际游戏场景；`aidebug_stop` 重置并停止服务。仅获取 Library 依赖不会加载调试程序集；编辑器只保留启动配置检查。
 
 本机 `.ai_debug/config.json` 可配置：
 
@@ -75,7 +75,7 @@ testValue + 2
 
 ## 与 AI Guide 的关系
 
-两个插件独立安装、独立配置和激活。AIGuide 1.1 在检测到本项目有 AIDebug 时，额外列出 19 个 `ai_debug_*` 工具，调用已经激活的同进程调试模块；不自动加载或启用它。AIGuide 单独安装仍提供原来的 17 项引导工具。演练检查点是编辑器撤销机制，与运行时存档无关；点目录里的本机会话数据不参与演练回退。
+两个插件是独立的 Library 依赖，各自配置和激活。AIGuide 1.1 在检测到本项目有 AIDebug 时，额外列出 19 个 `ai_debug_*` 工具，调用已经激活的同进程调试模块；不自动加载或启用它。仅使用 AIGuide 时仍提供原来的 17 项引导工具。演练检查点是编辑器撤销机制，与运行时存档无关；点目录里的本机会话数据不参与演练回退。
 
 ```mermaid
 flowchart LR

@@ -217,16 +217,10 @@ diff --git a/modules/mono/mono_gd/gd_mono.cpp b/modules/mono/mono_gd/gd_mono.cpp
 diff --git a/modules/mono/build_scripts/build_assemblies.py b/modules/mono/build_scripts/build_assemblies.py
 --- a/modules/mono/build_scripts/build_assemblies.py
 +++ b/modules/mono/build_scripts/build_assemblies.py
-@@ -404,0 +405,40 @@
-+    # ai_debug: Resolve the independently installed module, with a built-in fallback.
-+    import json
-+
+@@ -404,0 +405,34 @@
++    # ai_debug: Resolve the module from the build environment, with a built-in fallback.
 +    godot_source_root = os.path.abspath(os.path.join(module_dir, os.pardir, os.pardir))
 +    ai_debug_module_dir = os.environ.get("GODOT_AI_DEBUG_MODULE_DIR", "")
-+    ai_debug_install_file = os.path.join(godot_source_root, ".ai_debug-install.json")
-+    if not ai_debug_module_dir and os.path.isfile(ai_debug_install_file):
-+        with open(ai_debug_install_file, encoding="utf-8") as install_file:
-+            ai_debug_module_dir = json.load(install_file)["module_dir"]
 +    if not ai_debug_module_dir:
 +        ai_debug_module_dir = os.path.abspath(os.path.join(module_dir, os.pardir, "ai_debug"))
 +    ai_debug_csproj = os.path.join(ai_debug_module_dir, "managed", "Godot.AIDebug", "Godot.AIDebug.csproj")
